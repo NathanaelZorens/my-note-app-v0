@@ -3,7 +3,7 @@ import type { Note } from "@/types/note";
 export const DUMMY_NOTES: Note[] = [
   {
     id: "1",
-    title: "First Note",
+    title: "First Note XX",
     content: "This is the content of my first note.",
     date: "2025-12-09",
   },

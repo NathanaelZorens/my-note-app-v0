@@ -1,8 +1,11 @@
+import { AddButton } from "@/components/AddButton";
+import { NoteItem } from "@/components/NoteItem";
 import { useSecretCorner } from "@/context/SecretCornerContext";
-import { DUMMY_NOTES } from "@/data/dummy-notes";
+import { createNote, loadNotes } from "@/data/note-store";
 import type { Note } from "@/types/note";
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import "../../global.css";
@@ -10,42 +13,49 @@ import "../../global.css";
 // Invisible corner hit-area size (padding so list doesn't overlap corners)
 const CORNER_SIZE = 56;
 
-// Component for a single note item (tappable → opens detail)
-const NoteItem = ({ note }: { note: Note }) => {
-  const router = useRouter();
-
-  //snippet preview on Home screen
-  const maxChars = 20;
-  const raw = note.content.trim();
-  const snippet = raw.length > maxChars ? raw.slice(0, maxChars) : raw;
-
-  return (
-    <Pressable
-      className="w-full h-18 bg-white p-4 rounded-lg mb-3 flex-row justify-between items-center shadow"
-      onPress={() => router.push(`/note/${note.id}` as never)}
-    >
-      <View>
-        <Text style={styles.title}>{note.title}</Text>
-        <Text style={styles.preview} numberOfLines={2} ellipsizeMode="tail">
-          {snippet}...
-        </Text>
-      </View>
-      <Text style={styles.date}>{note.date}</Text>
-    </Pressable>
-  );
-};
-
 // Main Screen: list + 4 invisible corner "secret" zones (UpL=1, UpR=2, DownL=3, DownR=4)
 export default function NoteListScreen() {
-  const [notes, setNotes] = useState<Note[]>(DUMMY_NOTES);
+  const [notes, setNotes] = useState<Note[]>([]);
   const { setCornerIndex } = useSecretCorner();
+  const router = useRouter();
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      (async () => {
+        const fresh = await loadNotes();
+        if (isActive) {
+          setNotes(fresh);
+        }
+      })();
+
+      return () => {
+        isActive = false;
+      };
+    }, []),
+  );
 
   const renderItem = ({ item }: { item: Note }) => <NoteItem note={item} />;
+
+  async function handleAddDummyNote() {
+    const newNote = await createNote({
+      title: "New Note",
+      content: "",
+      isGimmicked: false,
+    });
+
+    const fresh = await loadNotes();
+    setNotes(fresh);
+
+    router.push(`/note/${newNote.id}` as never);
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View className="items-center flex-col m-4">
         <Text style={styles.header}>My Notes</Text>
+        <AddButton onPress={handleAddDummyNote} />
         <FlatList
           data={notes}
           renderItem={renderItem}
@@ -128,24 +138,9 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 3,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#444",
-  },
-  date: {
-    fontSize: 12,
-    color: "#999",
-  },
   emptyText: {
     textAlign: "center",
     marginTop: 50,
     color: "#999",
-  },
-  preview: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#666",
-    maxWidth: "100%", // so it doesn’t overlap the date on the right
   },
 });
