@@ -13,12 +13,23 @@ const CORNER_SIZE = 56;
 // Component for a single note item (tappable → opens detail)
 const NoteItem = ({ note }: { note: Note }) => {
   const router = useRouter();
+
+  //snippet preview on Home screen
+  const maxChars = 20;
+  const raw = note.content.trim();
+  const snippet = raw.length > maxChars ? raw.slice(0, maxChars) : raw;
+
   return (
     <Pressable
-      className="w-full h-16 bg-white p-4 rounded-lg mb-3 flex-row justify-between items-center shadow"
+      className="w-full h-18 bg-white p-4 rounded-lg mb-3 flex-row justify-between items-center shadow"
       onPress={() => router.push(`/note/${note.id}` as never)}
     >
-      <Text style={styles.title}>{note.title}</Text>
+      <View>
+        <Text style={styles.title}>{note.title}</Text>
+        <Text style={styles.preview} numberOfLines={2} ellipsizeMode="tail">
+          {snippet}...
+        </Text>
+      </View>
       <Text style={styles.date}>{note.date}</Text>
     </Pressable>
   );
@@ -130,5 +141,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 50,
     color: "#999",
+  },
+  preview: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "#666",
+    maxWidth: "100%", // so it doesn’t overlap the date on the right
   },
 });

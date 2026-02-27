@@ -3,10 +3,10 @@ import React, { createContext, useContext, useState } from "react";
 //export type CornerValue = "Red" | "Blue" | "Green" | "Purple" | null;
 
 export const predictions = [
-  "Ace of Spades", // slot 0 → top-left
-  "Two of Hearts", // slot 1 → top-right
-  "Three of Clubs", // slot 2 → bottom-left
-  "Four of Diamonds", // slot 3 → bottom-right
+  "My prediction is Ace of Spades", // slot 0 → top-left
+  "My prediction is Two of Hearts", // slot 1 → top-right
+  "My prediction is Three of Clubs", // slot 2 → bottom-left
+  "My prediction is Four of Diamonds", // slot 3 → bottom-right
 ];
 
 export type CornerIndex = 0 | 1 | 2 | 3 | null;
