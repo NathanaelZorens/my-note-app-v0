@@ -15,7 +15,7 @@ const NoteItem = ({ note }: { note: Note }) => {
   const router = useRouter();
   return (
     <Pressable
-      style={styles.item}
+      className="w-full h-16 bg-white p-4 rounded-lg mb-3 flex-row justify-between items-center shadow"
       onPress={() => router.push(`/note/${note.id}` as never)}
     >
       <Text style={styles.title}>{note.title}</Text>
@@ -33,7 +33,7 @@ export default function NoteListScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.content}>
+      <View className="items-center flex-col m-4">
         <Text style={styles.header}>My Notes</Text>
         <FlatList
           data={notes}

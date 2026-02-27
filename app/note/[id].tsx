@@ -1,15 +1,17 @@
-import { useLocalSearchParams } from "expo-router";
-import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-
 import { Colors } from "@/constants/theme";
 import { predictions, useSecretCorner } from "@/context/SecretCornerContext";
 import { getNoteById } from "@/data/dummy-notes";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 /** Normal notes: paper-style card layout. Gimmicked: show 1–4 from list-page corner taps. */
 export default function NoteDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const note = id ? getNoteById(id) : undefined;
   const { cornerIndex } = useSecretCorner();
   const colorScheme = useColorScheme();
@@ -17,11 +19,14 @@ export default function NoteDetailScreen() {
 
   if (!note) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.background }]}
+        edges={["top"]}
+      >
         <Text style={[styles.error, { color: theme.icon }]}>
           Note not found.
         </Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -39,7 +44,21 @@ export default function NoteDetailScreen() {
       : note.content;
 
   return (
-    <View style={[styles.container, { backgroundColor: pageBg }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: pageBg }]}
+      edges={["top"]}
+    >
+      <View style={styles.headerRow}>
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.backButton}
+          hitSlop={8}
+        >
+          <Ionicons name="chevron-back" size={22} color={theme.tint} />
+          <Text style={[styles.backText, { color: theme.tint }]}>Back</Text>
+        </Pressable>
+      </View>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -55,7 +74,7 @@ export default function NoteDetailScreen() {
           </Text>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -101,5 +120,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "center",
     marginTop: 40,
+  },
+  headerRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+    paddingRight: 8,
+  },
+  backText: {
+    fontSize: 16,
+    fontWeight: "500",
+    marginLeft: 4,
   },
 });
