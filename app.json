@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "my-note-app",
+    "name": "Notes",
     "slug": "my-note-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,6 +12,8 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.mynoteapp.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -44,6 +46,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "47e0dc14-a1e7-450e-b29a-dcc3761bdd01"
+      }
     }
   }
 }
