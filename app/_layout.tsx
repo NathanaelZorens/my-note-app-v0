@@ -40,6 +40,7 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="note" options={{ headerShown: false }} />
+        <Stack.Screen name="draw" options={{ headerShown: false }} />
       </Stack>
       </SecretCornerProvider>
       <StatusBar style="dark" />

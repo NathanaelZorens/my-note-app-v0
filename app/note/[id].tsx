@@ -1,3 +1,4 @@
+import { DrawingView } from "@/components/DrawingView";
 import { Colors } from "@/constants/theme";
 import {
   useSecretCorner,
@@ -6,7 +7,7 @@ import {
 import { deleteNote, getNote, updateNote } from "@/data/note-store";
 import { setupRouteForGimmick } from "@/data/gimmick-note-factory";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import type { Note } from "@/types/note";
+import { drawingHasContent, type Note } from "@/types/note";
 import { Ionicons } from "@expo/vector-icons";
 import { useTiltDetector } from "@/hooks/use-tilt-detector";
 import { useIsFocused } from "@react-navigation/native";
@@ -19,6 +20,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -44,6 +46,9 @@ export default function NoteDetailScreen() {
 
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
+  const { height: screenHeight } = useWindowDimensions();
+  // Drawings fill most of the screen so revealed/large doodles read clearly.
+  const drawingHeight = Math.round(screenHeight * 0.9);
 
   // Secret Note 3 only — Secret Note 2 receives flips on Home.
   const isTiltPreviewNote = note?.gimmickType === "tilt-live";
@@ -73,6 +78,21 @@ export default function NoteDetailScreen() {
       setLoading(false);
     })();
   }, [id]);
+
+  // Re-read the note whenever the screen regains focus (e.g. returning from the
+  // drawing editor) so freshly saved drawings show up. Title/content live in
+  // their own state, so refreshing `note` won't clobber in-progress text edits.
+  useEffect(() => {
+    if (!isFocused || !id) return;
+    let active = true;
+    (async () => {
+      const found = await getNote(String(id));
+      if (active && found) setNote(found);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [isFocused, id]);
 
   function resolveTitleForSave(currentTitle: string, ghost: boolean) {
     if (ghost && currentTitle.trim() === "") {
@@ -137,6 +157,8 @@ export default function NoteDetailScreen() {
 
   const outs = note.gimmickConfig?.outs ?? [];
   const outPrefix = note.gimmickConfig?.outPrefix ?? "";
+  const revealKind = note.gimmickConfig?.revealKind ?? "text";
+  const drawingOuts = note.gimmickConfig?.drawingOuts ?? [];
   // Cover shown whenever the note isn't actively revealing an out: the prefix
   // doubles as a believable disguise, falling back to "..." when empty.
   const cover = outPrefix.trim() !== "" ? outPrefix : "...";
@@ -151,36 +173,41 @@ export default function NoteDetailScreen() {
     return /\s$/.test(outPrefix) ? outPrefix + out : `${outPrefix} ${out}`;
   };
 
-  const revealAt = (index: number | null): string => {
-    if (index === null) return cover;
-    const out = outs[index];
-    return out !== undefined ? composeReveal(out) : cover;
-  };
-
-  const bodyText = (() => {
-    if (!note.isGimmicked) return content;
-    if (isTiltPreviewNote) {
-      return revealAt(previewTiltIndex);
-    }
-    if (!isArmed) return cover;
+  // The out index the secret inputs currently select, or null when covered.
+  const selectedIndex: number | null = (() => {
+    if (!note.isGimmicked) return null;
+    if (isTiltPreviewNote) return previewTiltIndex;
+    if (!isArmed) return null;
     if (usesCardIndex) {
       // suit = tilt (0–3), rank = two corner taps as base-4 (first*4 + second).
-      if (tiltIndex === null || cornerTaps.length < 2) {
-        return cover;
-      }
+      if (tiltIndex === null || cornerTaps.length < 2) return null;
       const rank = cornerTaps[0] * 4 + cornerTaps[1];
       // Ranks only go 0–12 (Ace–King); the 3 spare grid cells reveal nothing.
-      if (rank > 12) return cover;
-      return revealAt(tiltIndex * 13 + rank);
+      if (rank > 12) return null;
+      return tiltIndex * 13 + rank;
     }
     if (usesCombo) {
-      if (tiltIndex === null || cornerIndex === null) {
-        return cover;
-      }
-      return revealAt(tiltIndex * 4 + cornerIndex);
+      if (tiltIndex === null || cornerIndex === null) return null;
+      return tiltIndex * 4 + cornerIndex;
     }
-    return revealAt(usesTilt ? tiltIndex : cornerIndex);
+    return usesTilt ? tiltIndex : cornerIndex;
   })();
+
+  // Text body / caption. For drawing reveals the caption is optional (empty
+  // strings simply render nothing under the picture).
+  const bodyText = (() => {
+    if (!note.isGimmicked) return content;
+    if (selectedIndex === null) return cover;
+    const out = outs[selectedIndex];
+    if (revealKind === "drawing") return out ? composeReveal(out) : "";
+    return out !== undefined ? composeReveal(out) : cover;
+  })();
+
+  // The drawing to reveal (drawing-kind gimmicks only), when selected.
+  const revealDrawing =
+    note.isGimmicked && revealKind === "drawing" && selectedIndex !== null
+      ? drawingOuts[selectedIndex] ?? null
+      : null;
 
   async function handleSave() {
     if (!note) return;
@@ -232,6 +259,11 @@ export default function NoteDetailScreen() {
     navigateBack();
   }
 
+  function openDrawEditor() {
+    if (!note) return;
+    router.push(`/draw?noteId=${encodeURIComponent(note.id)}` as never);
+  }
+
   function handleEditPredictions() {
     if (!note?.isGimmicked) return;
     const gimmickType = note.gimmickType ?? "corner";
@@ -273,6 +305,15 @@ export default function NoteDetailScreen() {
         </Pressable>
 
         <View style={styles.headerActions}>
+          {!note.isGimmicked ? (
+            <Pressable
+              onPress={openDrawEditor}
+              style={styles.deleteButton}
+              hitSlop={8}
+            >
+              <Ionicons name="brush-outline" size={22} color={theme.tint} />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={handleDelete}
             style={styles.deleteButton}
@@ -320,20 +361,41 @@ export default function NoteDetailScreen() {
             }
           />
 
-          {/* For gimmicked notes, show bodyText read-only; for normal, editable TextInput */}
+          {/* Gimmicked notes are read-only reveals (text and/or drawing);
+              normal notes are an editable text body plus an optional doodle. */}
           {note.isGimmicked ? (
-            <Text style={[styles.content, { color: theme.text }]}>
-              {bodyText}
-            </Text>
+            <>
+              {bodyText !== "" ? (
+                <Text style={[styles.content, { color: theme.text }]}>
+                  {bodyText}
+                </Text>
+              ) : null}
+              {revealDrawing && drawingHasContent(revealDrawing) ? (
+                <DrawingView
+                  drawing={revealDrawing}
+                  style={[styles.revealDrawing, { height: drawingHeight }]}
+                />
+              ) : null}
+            </>
           ) : (
-            <TextInput
-              style={[styles.contentInput, { color: theme.text }]}
-              value={content}
-              onChangeText={setContent}
-              placeholder="Start typing..."
-              placeholderTextColor={theme.icon}
-              multiline
-            />
+            <>
+              <TextInput
+                style={[styles.contentInput, { color: theme.text }]}
+                value={content}
+                onChangeText={setContent}
+                placeholder="Start typing..."
+                placeholderTextColor={theme.icon}
+                multiline
+              />
+              {drawingHasContent(note.drawing) ? (
+                <Pressable onPress={openDrawEditor} style={styles.doodleWrap}>
+                  <DrawingView
+                    drawing={note.drawing}
+                    style={[styles.doodle, { height: drawingHeight }]}
+                  />
+                </Pressable>
+              ) : null}
+            </>
           )}
         </View>
       </ScrollView>
@@ -384,6 +446,19 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     opacity: 0.9,
     textAlignVertical: "top",
+  },
+  revealDrawing: {
+    width: "100%",
+    marginTop: 12,
+  },
+  doodleWrap: {
+    marginTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(120,120,120,0.3)",
+    paddingTop: 12,
+  },
+  doodle: {
+    width: "100%",
   },
   error: {
     fontSize: 16,

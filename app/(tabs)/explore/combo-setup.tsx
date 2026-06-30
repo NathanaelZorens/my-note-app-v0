@@ -1,12 +1,15 @@
 import { Colors } from "@/constants/theme";
 import { GimmickMetaFields } from "@/components/GimmickMetaFields";
+import { GimmickOutSlot } from "@/components/GimmickOutSlot";
+import { RevealKindToggle } from "@/components/RevealKindToggle";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { defaultOutsForType } from "@/data/gimmick-note-factory";
 import { getNote, updateNote } from "@/data/note-store";
 import { CORNER_LABELS } from "@/data/predictions-store";
 import { TILT_LABELS } from "@/data/tilt-predictions-store";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import type { Note } from "@/types/note";
+import type { GimmickRevealKind, Note } from "@/types/note";
+import { useIsFocused } from "@react-navigation/native";
 import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -15,7 +18,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,8 +28,10 @@ export default function ComboSetupScreen() {
   const [draft, setDraft] = useState<string[]>(Array(16).fill(""));
   const [prefix, setPrefix] = useState("");
   const [dateStr, setDateStr] = useState("");
+  const [revealKind, setRevealKind] = useState<GimmickRevealKind>("text");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const isFocused = useIsFocused();
 
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
@@ -50,6 +54,7 @@ export default function ComboSetupScreen() {
         );
         setPrefix(found?.gimmickConfig?.outPrefix ?? "");
         setDateStr(found?.date ?? "");
+        setRevealKind(found?.gimmickConfig?.revealKind ?? "text");
         setLoading(false);
       }
     })();
@@ -57,6 +62,19 @@ export default function ComboSetupScreen() {
       active = false;
     };
   }, [noteId]);
+
+  // Refresh on focus so drawings authored in the editor show as thumbnails.
+  useEffect(() => {
+    if (!isFocused || !noteId) return;
+    let active = true;
+    (async () => {
+      const found = await getNote(noteId);
+      if (active && found) setNote(found);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [isFocused, noteId]);
 
   function updateSlot(index: number, text: string) {
     setDraft((prev) => {
@@ -67,11 +85,26 @@ export default function ComboSetupScreen() {
     setSaved(false);
   }
 
+  async function changeRevealKind(kind: GimmickRevealKind) {
+    setRevealKind(kind);
+    setSaved(false);
+    if (!note) return;
+    const updated = await updateNote(note.id, {
+      gimmickConfig: { outs: [], ...note.gimmickConfig, revealKind: kind },
+    });
+    if (updated) setNote(updated);
+  }
+
   async function handleSave() {
     if (!note) return;
     await updateNote(note.id, {
       date: dateStr.trim() || note.date,
-      gimmickConfig: { ...note.gimmickConfig, outs: draft, outPrefix: prefix },
+      gimmickConfig: {
+        ...note.gimmickConfig,
+        outs: draft,
+        outPrefix: prefix,
+        revealKind,
+      },
     });
     setSaved(true);
   }
@@ -123,6 +156,8 @@ export default function ComboSetupScreen() {
         }}
       />
 
+      <RevealKindToggle value={revealKind} onChange={changeRevealKind} />
+
       {TILT_LABELS.map((tiltLabel, tiltIndex) => (
         <View key={tiltLabel} style={styles.group}>
           <Text style={[styles.groupTitle, { color: theme.text }]}>
@@ -132,26 +167,17 @@ export default function ComboSetupScreen() {
           {CORNER_LABELS.map((cornerLabel, cornerIndex) => {
             const comboIndex = tiltIndex * 4 + cornerIndex;
             return (
-              <View key={`${tiltLabel}-${cornerLabel}`} style={styles.field}>
-                <Text style={[styles.label, { color: theme.icon }]}>
-                  {cornerLabel} (item {cornerIndex + 1}, slot {comboIndex + 1})
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      color: theme.text,
-                      borderColor: theme.icon,
-                      backgroundColor: colorScheme === "dark" ? "#1e2022" : "#fff",
-                    },
-                  ]}
-                  value={draft[comboIndex]}
-                  onChangeText={(text) => updateSlot(comboIndex, text)}
-                  placeholder={`Prediction for category ${tiltIndex + 1}, item ${cornerIndex + 1}`}
-                  placeholderTextColor={theme.icon}
-                  multiline
-                />
-              </View>
+              <GimmickOutSlot
+                key={`${tiltLabel}-${cornerLabel}`}
+                noteId={note.id}
+                index={comboIndex}
+                label={`${cornerLabel} (item ${cornerIndex + 1}, slot ${comboIndex + 1})`}
+                value={draft[comboIndex]}
+                placeholder={`Prediction for category ${tiltIndex + 1}, item ${cornerIndex + 1}`}
+                onChangeText={(text) => updateSlot(comboIndex, text)}
+                revealKind={revealKind}
+                drawing={note.gimmickConfig?.drawingOuts?.[comboIndex]}
+              />
             );
           })}
         </View>

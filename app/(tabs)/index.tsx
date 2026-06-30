@@ -6,6 +6,7 @@ import type { Note } from "@/types/note";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import * as Brightness from "expo-brightness";
+import * as Haptics from "expo-haptics";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import * as NavigationBar from "expo-navigation-bar";
 import { useRouter } from "expo-router";
@@ -60,6 +61,18 @@ export default function NoteListScreen() {
   const handleFaceUpChange = useCallback((up: boolean) => {
     faceUpRef.current = up;
   }, []);
+
+  // Corner tap handler. During blackout the performer taps eyes-free, so a
+  // light haptic confirms each tap landed.
+  const handleCornerTap = useCallback(
+    (value: 0 | 1 | 2 | 3, blind: boolean) => {
+      recordCornerTap(value);
+      if (blind) {
+        Haptics.selectionAsync().catch(() => {});
+      }
+    },
+    [recordCornerTap],
+  );
 
   // Tilt keeps listening through blackout: the screen never truly sleeps
   // (keep-awake) and Home stays focused under the overlay, so a face-down
@@ -190,11 +203,11 @@ export default function NoteListScreen() {
 
         <Pressable
           style={[styles.corner, styles.cornerTopLeft, { top: insets.top }]}
-          onPress={() => recordCornerTap(0)}
+          onPress={() => handleCornerTap(0, false)}
         />
         <Pressable
           style={[styles.corner, styles.cornerTopRight, { top: insets.top }]}
-          onPress={() => recordCornerTap(1)}
+          onPress={() => handleCornerTap(1, false)}
         />
         <Pressable
           style={[
@@ -202,7 +215,7 @@ export default function NoteListScreen() {
             styles.cornerBottomLeft,
             { bottom: insets.bottom },
           ]}
-          onPress={() => recordCornerTap(2)}
+          onPress={() => handleCornerTap(2, false)}
         />
         <Pressable
           style={[
@@ -210,7 +223,7 @@ export default function NoteListScreen() {
             styles.cornerBottomRight,
             { bottom: insets.bottom },
           ]}
-          onPress={() => recordCornerTap(3)}
+          onPress={() => handleCornerTap(3, false)}
         />
 
         <Pressable
@@ -228,7 +241,49 @@ export default function NoteListScreen() {
           buttons. The app stays foregrounded, so tilt keeps listening.
           Double-tap anywhere on it to wake back up. */}
       {blackout ? (
-        <Pressable style={styles.blackout} onPress={handleBlackoutTap} />
+        <>
+          <Pressable style={styles.blackout} onPress={handleBlackoutTap} />
+          {/* Corner zones sit above the black overlay so the armed routine can
+              still take corner taps (e.g. card-index rank) while it looks off.
+              The center keeps the double-tap-to-wake; corner taps don't count
+              toward it. */}
+          <Pressable
+            style={[
+              styles.corner,
+              styles.cornerTopLeft,
+              styles.cornerOverlay,
+              { top: insets.top },
+            ]}
+            onPress={() => handleCornerTap(0, true)}
+          />
+          <Pressable
+            style={[
+              styles.corner,
+              styles.cornerTopRight,
+              styles.cornerOverlay,
+              { top: insets.top },
+            ]}
+            onPress={() => handleCornerTap(1, true)}
+          />
+          <Pressable
+            style={[
+              styles.corner,
+              styles.cornerBottomLeft,
+              styles.cornerOverlay,
+              { bottom: insets.bottom },
+            ]}
+            onPress={() => handleCornerTap(2, true)}
+          />
+          <Pressable
+            style={[
+              styles.corner,
+              styles.cornerBottomRight,
+              styles.cornerOverlay,
+              { bottom: insets.bottom },
+            ]}
+            onPress={() => handleCornerTap(3, true)}
+          />
+        </>
       ) : (
         /* Invisible tab on the right edge (only while lit). Hold to go dark. */
         <Pressable
@@ -321,6 +376,9 @@ const styles = StyleSheet.create({
   cornerTopRight: { right: 0 },
   cornerBottomLeft: { left: 0 },
   cornerBottomRight: { right: 0 },
+  // Stacked above the blackout overlay (zIndex 10) so corner taps register
+  // during fake screen-off.
+  cornerOverlay: { zIndex: 30 },
   emptyText: {
     textAlign: "center",
     marginTop: 50,
